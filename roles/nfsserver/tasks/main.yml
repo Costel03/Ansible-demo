@@ -1,0 +1,69 @@
+---
+- name: Install NFS server (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+    update_cache: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Install NFS server (RedHat/RockyLinux/CentOS)
+  ansible.builtin.yum:
+    name: nfs-utils
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Create NFS export directory
+  ansible.builtin.file:
+    path: "{{ nfs_export_dir }}"
+    state: directory
+    mode: '0755'
+    owner: nobody
+    group: "{{ 'nogroup' if ansible_os_family == 'Debian' else 'nobody' }}"
+
+- name: Configure /etc/exports
+  ansible.builtin.template:
+    src: exports.j2
+    dest: /etc/exports
+    mode: '0644'
+    owner: root
+    group: root
+  notify:
+  - Reload NFS exports
+  - Restart NFS
+
+- name: Enable and start NFS server (Debian)
+  ansible.builtin.service:
+    name: nfs-kernel-server
+    state: started
+    enabled: true
+  when: ansible_os_family == 'Debian'
+
+- name: Enable and start NFS server (RedHat)
+  ansible.builtin.service:
+    name: nfs-server
+    state: started
+    enabled: true
+  when: ansible_os_family == 'RedHat'
+
+- name: Check if firewalld is running (RedHat)
+  ansible.builtin.command: systemctl is-active firewalld
+  register: firewalld_status
+  ignore_errors: true
+  changed_when: false
+  when: ansible_os_family == 'RedHat'
+
+- name: Allow NFS through firewalld (RedHat)
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+  - nfs
+  - rpc-bind
+  - mountd
+  when:
+  - ansible_os_family == 'RedHat'
+  - firewalld_status.rc is defined
+  - firewalld_status.rc == 0
+  ignore_errors: true

@@ -1,0 +1,73 @@
+---
+- name: Test Connectivity to all hosts
+  hosts: all
+  gather_facts: true
+  tasks:
+  - name: Ping all hosts
+    ansible.builtin.ping:
+
+
+  - name: Print OS family and distribution
+    ansible.builtin.debug:
+      msg: "Host: {{ inventory_hostname }} | OS: {{ ansible_distribution }} {{ ansible_distribution_version }} | Family: {{ ansible_os_family }}"
+
+- name: Verify LAMP on webservers
+  hosts: webservers
+  become: true
+  tasks:
+  - name: Check Apache is running
+    ansible.builtin.service_facts:
+
+
+  - name: Assert Apache is active (Debian)
+    ansible.builtin.assert:
+      that: ansible_facts.services['apache2.service'].state == 'running'
+      fail_msg: "Apache2 is NOT running on {{ inventory_hostname }}"
+      success_msg: "Apache2 is running on {{ inventory_hostname }}"
+    when: ansible_os_family == 'Debian'
+
+  - name: Assert Apache is active (RedHat)
+    ansible.builtin.assert:
+      that: ansible_facts.services['httpd.service'].state == 'running'
+      fail_msg: "httpd is NOT running on {{ inventory_hostname }}"
+      success_msg: "httpd is running on {{ inventory_hostname }}"
+    when: ansible_os_family == 'RedHat'
+
+  - name: Check acasa.local responds via curl
+    ansible.builtin.uri:
+      url: "http://{{ ansible_host }}/index.php"
+      status_code: 200
+    ignore_errors: true
+
+- name: Verify NFS exports
+  hosts: nfsservers
+  become: true
+  tasks:
+  - name: Check NFS exports file exists
+    ansible.builtin.stat:
+      path: /etc/exports
+    register: exports_file
+
+  - name: Show exports content
+    ansible.builtin.command: cat /etc/exports
+    register: exports_content
+    changed_when: false
+
+  - name: Print exports
+    ansible.builtin.debug:
+      msg: "{{ exports_content.stdout }}"
+
+- name: Verify WordPress
+  hosts: wordpress_vms
+  become: true
+  tasks:
+  - name: Check if WordPress is installed
+    ansible.builtin.stat:
+      path: /var/www/html/wordpress/wp-config.php
+    register: wp_config
+
+  - name: Assert wp-config.php exists
+    ansible.builtin.assert:
+      that: wp_config.stat.exists
+      fail_msg: "WordPress is NOT installed on {{ inventory_hostname }}"
+      success_msg: "WordPress is installed on {{ inventory_hostname }}"

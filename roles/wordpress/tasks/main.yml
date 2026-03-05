@@ -1,0 +1,197 @@
+---
+- name: Install EPEL (RedHat)
+  ansible.builtin.yum:
+    name: epel-release
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Switch CentOS 7 repos to vault (EOL fix)
+  ansible.builtin.shell: |
+    sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-*.repo
+    sed -i 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
+  args:
+    executable: /bin/bash
+  when: ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7'
+
+- name: Disable MySQL module on EL8 (avoid modular filtering)
+  ansible.builtin.command: dnf -y module disable mysql
+  when: ansible_os_family == 'RedHat' and ansible_distribution_major_version == '8'
+  changed_when: false
+  failed_when: false
+
+- name: Install MySQL repo RPM (RedHat)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    URL="{{ 'https://dev.mysql.com/get/mysql80-community-release-el7-11.noarch.rpm' if ansible_distribution_major_version == '7' else 'https://dev.mysql.com/get/mysql80-community-release-el8-9.noarch.rpm' }}"
+    curl -L --fail -o /tmp/mysql-community-release.rpm "$URL"
+    rpm -Uvh --replacepkgs /tmp/mysql-community-release.rpm
+  args:
+    executable: /bin/bash
+  when: ansible_os_family == 'RedHat'
+
+- name: Install WordPress dependencies (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+    - apache2
+    - php
+    - php-mysql
+    - php-curl
+    - php-gd
+    - php-xml
+    - php-mbstring
+    - php-zip
+    - libapache2-mod-php
+    - mysql-server
+    - python3-pymysql
+    - unzip
+    state: present
+    update_cache: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Install WordPress dependencies (RedHat/RockyLinux/CentOS)
+  ansible.builtin.yum:
+    name:
+    - httpd
+    - php
+    - php-mysqlnd
+    - php-curl
+    - php-gd
+    - php-xml
+    - php-mbstring
+    - php-zip
+    - mysql-community-server
+    - python3-PyMySQL
+    - tar
+    state: present
+    disable_gpg_check: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Start and enable Apache (Debian)
+  ansible.builtin.service:
+    name: apache2
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Start and enable Apache (RedHat)
+  ansible.builtin.service:
+    name: httpd
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Start and enable MySQL (Debian)
+  ansible.builtin.service:
+    name: mysql
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Start and enable MySQL (RedHat)
+  ansible.builtin.service:
+    name: mysqld
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Create WordPress database (Debian)
+  community.mysql.mysql_db:
+    name: "{{ wordpress_db_name }}"
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  when: ansible_os_family == 'Debian'
+
+- name: Create WordPress database (RedHat)
+  community.mysql.mysql_db:
+    name: "{{ wordpress_db_name }}"
+    state: present
+    login_unix_socket: /var/lib/mysql/mysql.sock
+  when: ansible_os_family == 'RedHat'
+
+- name: Create WordPress DB user (Debian)
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    host: localhost
+    state: present
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  when: ansible_os_family == 'Debian'
+
+- name: Create WordPress DB user (RedHat)
+  community.mysql.mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    host: localhost
+    state: present
+    login_unix_socket: /var/lib/mysql/mysql.sock
+  when: ansible_os_family == 'RedHat'
+
+- name: Download WordPress archive
+  ansible.builtin.get_url:
+    url: https://wordpress.org/latest.tar.gz
+    dest: /tmp/wordpress.tar.gz
+    mode: '0644'
+    timeout: 60
+
+- name: Extract WordPress into /var/www/html
+  ansible.builtin.unarchive:
+    src: /tmp/wordpress.tar.gz
+    dest: /var/www/html/
+    remote_src: yes
+    creates: /var/www/html/wordpress/wp-settings.php
+
+- name: Deploy wp-config.php from template
+  ansible.builtin.template:
+    src: wp-config.php.j2
+    dest: /var/www/html/wordpress/wp-config.php
+    mode: '0640'
+    owner: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
+    group: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
+
+- name: Set correct ownership for WordPress files (Debian)
+  ansible.builtin.file:
+    path: /var/www/html/wordpress
+    owner: www-data
+    group: www-data
+    recurse: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Set correct ownership for WordPress files (RedHat)
+  ansible.builtin.file:
+    path: /var/www/html/wordpress
+    owner: apache
+    group: apache
+    recurse: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Deploy WordPress Apache vhost (Debian)
+  ansible.builtin.template:
+    src: wp-vhost.conf.j2
+    dest: /etc/apache2/sites-available/wordpress.conf
+    mode: '0644'
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache WP
+
+- name: Enable WordPress site (Debian)
+  ansible.builtin.command:
+    cmd: a2ensite wordpress.conf
+    creates: /etc/apache2/sites-enabled/wordpress.conf
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache WP
+
+- name: Enable mod_rewrite for WordPress (Debian)
+  ansible.builtin.command:
+    cmd: a2enmod rewrite
+    creates: /etc/apache2/mods-enabled/rewrite.load
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache WP
+
+- name: Deploy WordPress Apache vhost (RedHat)
+  ansible.builtin.template:
+    src: wp-vhost.conf.j2
+    dest: /etc/httpd/conf.d/wordpress.conf
+    mode: '0644'
+  when: ansible_os_family == 'RedHat'
+  notify: Reload Apache WP

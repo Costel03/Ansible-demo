@@ -1,0 +1,14 @@
+---
+ansible_python_interpreter: /usr/bin/python3
+apache_vhost_servername: acasa.local
+apache_docroot: /var/www/acasa.local
+mysql_root_password: Secret123!
+wordpress_db_name: wordpress
+wordpress_db_user: wpuser
+wordpress_db_password: Wp@Pass123!
+nfs_export_dir: /srv/nfs/share
+nfs_allowed_ips:
+- 192.168.56.120
+- 192.168.56.101
+- 192.168.56.102
+nfs_export_options: rw,sync,no_root_squash,no_subtree_check

@@ -1,0 +1,144 @@
+---
+- name: Install EPEL repository (RedHat)
+  ansible.builtin.yum:
+    name: epel-release
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Switch CentOS 7 repos to vault (EOL fix)
+  ansible.builtin.shell: |
+    sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-*.repo
+    sed -i 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
+  args:
+    executable: /bin/bash
+  when: ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7'
+
+- name: Disable MySQL module on EL8 (avoid modular filtering)
+  ansible.builtin.command: dnf -y module disable mysql
+  when: ansible_os_family == 'RedHat' and ansible_distribution_major_version == '8'
+  changed_when: false
+  failed_when: false
+
+- name: Install MySQL repo RPM (RedHat)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    URL="{{ 'https://dev.mysql.com/get/mysql80-community-release-el7-11.noarch.rpm' if ansible_distribution_major_version == '7' else 'https://dev.mysql.com/get/mysql80-community-release-el8-9.noarch.rpm' }}"
+    curl -L --fail -o /tmp/mysql-community-release.rpm "$URL"
+    rpm -Uvh --replacepkgs /tmp/mysql-community-release.rpm
+  args:
+    executable: /bin/bash
+  when: ansible_os_family == 'RedHat'
+
+- name: Install LAMP packages (Debian/Ubuntu)
+  ansible.builtin.apt:
+    name:
+    - apache2
+    - mysql-server
+    - php
+    - php-mysql
+    - libapache2-mod-php
+    - python3-pymysql
+    state: present
+    update_cache: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Install LAMP packages (RedHat/RockyLinux/CentOS)
+  ansible.builtin.yum:
+    name:
+    - httpd
+    - mysql-community-server
+    - php
+    - php-mysqlnd
+    - php-zip
+    - php-xml
+    - php-mbstring
+    - python3-PyMySQL
+    state: present
+    disable_gpg_check: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Ensure Apache is started and enabled (Debian)
+  ansible.builtin.service:
+    name: apache2
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Ensure Apache (httpd) is started and enabled (RedHat)
+  ansible.builtin.service:
+    name: httpd
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Ensure MySQL is started and enabled (Debian)
+  ansible.builtin.service:
+    name: mysql
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Ensure MySQL (mysqld) is started and enabled (RedHat)
+  ansible.builtin.service:
+    name: mysqld
+    state: started
+    enabled: yes
+  when: ansible_os_family == 'RedHat'
+
+- name: Create Apache document root directory
+  ansible.builtin.file:
+    path: "{{ apache_docroot }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
+    group: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
+
+- name: Set SELinux context on document root (RedHat)
+  community.general.sefcontext:
+    target: "{{ apache_docroot }}(/.*)?"
+    setype: httpd_sys_content_t
+    state: present
+  when:
+  - ansible_os_family == 'RedHat'
+  - not (ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7')
+
+- name: Apply SELinux context to document root (RedHat)
+  ansible.builtin.command: restorecon -Rv "{{ apache_docroot }}"
+  when: ansible_os_family == 'RedHat'
+  changed_when: false
+
+- name: Deploy acasa.local virtual host config (Debian)
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: /etc/apache2/sites-available/acasa.local.conf
+    mode: '0644'
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache
+
+- name: Enable acasa.local site (Debian)
+  ansible.builtin.command:
+    cmd: a2ensite acasa.local.conf
+    creates: /etc/apache2/sites-enabled/acasa.local.conf
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache
+
+- name: Enable mod_rewrite (Debian)
+  ansible.builtin.command:
+    cmd: a2enmod rewrite
+    creates: /etc/apache2/mods-enabled/rewrite.load
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache
+
+- name: Deploy acasa.local virtual host config (RedHat)
+  ansible.builtin.template:
+    src: vhost.conf.j2
+    dest: /etc/httpd/conf.d/acasa.local.conf
+    mode: '0644'
+  when: ansible_os_family == 'RedHat'
+  notify: Reload Apache
+
+- name: Deploy custom PHP index page
+  ansible.builtin.template:
+    src: index.php.j2
+    dest: "{{ apache_docroot }}/index.php"
+    mode: '0644'

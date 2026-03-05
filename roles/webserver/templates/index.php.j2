@@ -1,0 +1,29 @@
+<?php
+$os   = php_uname('s') . ' ' . php_uname('r');
+$host = gethostname();
+$ip   = $_SERVER['SERVER_ADDR'] ?? 'n/a';
+?>
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <title>Bine ai venit la {{ apache_vhost_servername }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f4f4f4; text-align:center; padding:60px; }
+    h1   { color:#2c3e50; }
+    p    { color:#555; font-size:1.1em; }
+    .box { background:#fff; border-radius:8px; padding:30px; display:inline-block;
+           box-shadow:0 2px 8px rgba(0,0,0,.15); }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Bine ai venit la <em>{{ apache_vhost_servername }}</em>!</h1>
+    <p>Pagina PHP personalizata servita de <strong>Apache + PHP</strong>.</p>
+    <p>Host: <strong><?= htmlspecialchars($host) ?></strong></p>
+    <p>IP server: <strong><?= htmlspecialchars($ip) ?></strong></p>
+    <p>OS: <strong><?= htmlspecialchars($os) ?></strong></p>
+    <p>PHP version: <strong><?= phpversion() ?></strong></p>
+  </div>
+</body>
+</html>

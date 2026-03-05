@@ -1,0 +1,19 @@
+<VirtualHost *:80>
+    ServerName {{ ansible_host }}
+    DocumentRoot /var/www/html/wordpress
+
+    <Directory /var/www/html/wordpress>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php index.html
+    </Directory>
+
+{% if ansible_os_family == 'Debian' %}
+    ErrorLog  ${APACHE_LOG_DIR}/wordpress_error.log
+    CustomLog ${APACHE_LOG_DIR}/wordpress_access.log combined
+{% else %}
+    ErrorLog  /var/log/httpd/wordpress_error.log
+    CustomLog /var/log/httpd/wordpress_access.log combined
+{% endif %}
+</VirtualHost>

@@ -1,0 +1,18 @@
+[webservers]
+ubuntu        ansible_host=192.168.56.120 ansible_user=vagrant ansible_ssh_private_key_file=~/.vagrant-keys/ubuntu
+rocky         ansible_host=192.168.56.101 ansible_user=vagrant ansible_ssh_private_key_file=~/.vagrant-keys/rocky
+centos        ansible_host=192.168.56.102 ansible_user=vagrant ansible_ssh_private_key_file=~/.vagrant-keys/centos ansible_python_interpreter=/usr/bin/python
+
+[nfsservers]
+ubuntu        ansible_host=192.168.56.120 ansible_user=vagrant ansible_ssh_private_key_file=~/.vagrant-keys/ubuntu
+
+[wordpress_vms]
+wordpress     ansible_host=192.168.56.103 ansible_user=vagrant ansible_ssh_private_key_file=~/.vagrant-keys/wordpress
+
+[debian_hosts]
+ubuntu
+wordpress
+
+[redhat_hosts]
+rocky
+centos

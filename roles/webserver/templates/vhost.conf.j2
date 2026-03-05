@@ -1,0 +1,19 @@
+<VirtualHost *:80>
+    ServerName {{ apache_vhost_servername }}
+    DocumentRoot {{ apache_docroot }}
+
+    <Directory {{ apache_docroot }}>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+        DirectoryIndex index.php index.html
+    </Directory>
+
+{% if ansible_os_family == 'Debian' %}
+    ErrorLog  ${APACHE_LOG_DIR}/acasa_error.log
+    CustomLog ${APACHE_LOG_DIR}/acasa_access.log combined
+{% else %}
+    ErrorLog  /var/log/httpd/acasa_error.log
+    CustomLog /var/log/httpd/acasa_access.log combined
+{% endif %}
+</VirtualHost>
