@@ -69,7 +69,18 @@ Vagrant.configure("2") do |config|
     wp.vm.network "private_network", ip: "192.168.56.103"
     wp.vm.provider "virtualbox" do |vb|
       vb.memory = 2048
-      vb.gui    = false
+      vb.gui    = true
     end
+    wp.vm.provision "shell", inline: <<-SHELL
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -q
+      apt-get install -yq xfce4 xfce4-goodies lightdm
+      systemctl set-default graphical.target
+      apt-get install -yq openssh-server
+      systemctl unmask ssh
+      systemctl enable ssh
+      systemctl restart ssh
+      systemctl start lightdm || true
+    SHELL
   end
 end

@@ -136,6 +136,13 @@
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
+- name: Remove default Apache welcome page (RedHat)
+  ansible.builtin.file:
+    path: /etc/httpd/conf.d/welcome.conf
+    state: absent
+  when: ansible_os_family == 'RedHat'
+  notify: Reload Apache
+
 - name: Deploy acasa.local virtual host config (RedHat)
   ansible.builtin.template:
     src: vhost.conf.j2
@@ -149,3 +156,26 @@
     src: index.php.j2
     dest: "{{ apache_docroot }}/index.php"
     mode: '0644'
+
+# NFS client - mount Ubuntu's NFS share on rocky and centos
+- name: Install NFS client (RedHat)
+  ansible.builtin.yum:
+    name: nfs-utils
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Create NFS mount point (RedHat)
+  ansible.builtin.file:
+    path: /mnt/nfs/share
+    state: directory
+    mode: '0755'
+  when: ansible_os_family == 'RedHat'
+
+- name: Mount NFS share from ubuntu (RedHat)
+  ansible.posix.mount:
+    path: /mnt/nfs/share
+    src: 192.168.56.120:/srv/nfs/share
+    fstype: nfs
+    opts: defaults
+    state: mounted
+  when: ansible_os_family == 'RedHat'

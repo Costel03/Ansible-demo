@@ -5,19 +5,19 @@
   gather_facts: true
   tasks:
   - name: Deploy LAMP stack
-    include_role:
+    import_role:
       name: webserver
     when: inventory_hostname in groups['webservers']
     tags: lamp
 
   - name: Deploy NFS server
-    include_role:
+    import_role:
       name: nfsserver
     when: inventory_hostname in groups['nfsservers']
     tags: nfs
 
   - name: Deploy WordPress
-    include_role:
+    import_role:
       name: wordpress
     when: inventory_hostname in groups['wordpress_vms']
     tags: wordpress
