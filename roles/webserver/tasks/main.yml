@@ -122,6 +122,13 @@
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
+- name: Disable default Apache site (Debian)
+  ansible.builtin.command:
+    cmd: a2dissite 000-default.conf
+    removes: /etc/apache2/sites-enabled/000-default.conf
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache
+
 - name: Enable mod_rewrite (Debian)
   ansible.builtin.command:
     cmd: a2enmod rewrite

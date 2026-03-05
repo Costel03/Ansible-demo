@@ -1,6 +1,3 @@
 {% for ip in nfs_allowed_ips %}
 {{ nfs_export_dir }}  {{ ip }}({{ nfs_export_options }})
 {% endfor %}
-<h1>Welcome to my custom LAMP server!</h1>
-<p>This is my personal demonstration of Ansible automation.</p>
-<p>Server: <strong><?= htmlspecialchars($host) ?></strong></p>
