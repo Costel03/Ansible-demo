@@ -1,3 +1,0 @@
----
-nfs_export_dir: /srv/nfs/share
-nfs_export_options: rw,sync,no_root_squash,no_subtree_check

@@ -1,36 +1,40 @@
 ---
+# ===========================================================
+# WORDPRESS - instaleaza WordPress pe o masina separata
+# Se ruleaza doar cu: ansible-playbook site.yml --tags wordpress
+# Functioneaza pe: Ubuntu, Rocky Linux, CentOS
+# ===========================================================
+
+# --- Pregatire repo-uri pentru RedHat/CentOS ---
 - name: Install EPEL (RedHat)
-  ansible.builtin.yum:
+  yum:
     name: epel-release
     state: present
   when: ansible_os_family == 'RedHat'
 
-- name: Switch CentOS 7 repos to vault (EOL fix)
-  ansible.builtin.shell: |
+# CentOS 7 e EOL, trebuie schimbat mirror-ul la vault
+- name: Fix CentOS 7 repos (EOL vault)
+  shell: |
     sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-*.repo
     sed -i 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
-  args:
-    executable: /bin/bash
   when: ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7'
 
-- name: Disable MySQL module on EL8 (avoid modular filtering)
-  ansible.builtin.command: dnf -y module disable mysql
+- name: Disable MySQL module on EL8
+  command: dnf -y module disable mysql
   when: ansible_os_family == 'RedHat' and ansible_distribution_major_version == '8'
   changed_when: false
   failed_when: false
 
-- name: Install MySQL repo RPM (RedHat)
-  ansible.builtin.shell: |
-    set -euo pipefail
+- name: Add MySQL community repo (RedHat)
+  shell: |
     URL="{{ 'https://dev.mysql.com/get/mysql80-community-release-el7-11.noarch.rpm' if ansible_distribution_major_version == '7' else 'https://dev.mysql.com/get/mysql80-community-release-el8-9.noarch.rpm' }}"
     curl -L --fail -o /tmp/mysql-community-release.rpm "$URL"
     rpm -Uvh --replacepkgs /tmp/mysql-community-release.rpm
-  args:
-    executable: /bin/bash
   when: ansible_os_family == 'RedHat'
 
+# --- Instalare pachete necesare WordPress ---
 - name: Install WordPress dependencies (Debian/Ubuntu)
-  ansible.builtin.apt:
+  apt:
     name:
     - apache2
     - php
@@ -48,8 +52,8 @@
     update_cache: yes
   when: ansible_os_family == 'Debian'
 
-- name: Install WordPress dependencies (RedHat/RockyLinux/CentOS)
-  ansible.builtin.yum:
+- name: Install WordPress dependencies (RedHat/CentOS/Rocky)
+  yum:
     name:
     - httpd
     - php
@@ -66,34 +70,37 @@
     disable_gpg_check: yes
   when: ansible_os_family == 'RedHat'
 
+# --- Pornire automata servicii ---
 - name: Start and enable Apache (Debian)
-  ansible.builtin.service:
+  service:
     name: apache2
     state: started
     enabled: yes
   when: ansible_os_family == 'Debian'
 
 - name: Start and enable Apache (RedHat)
-  ansible.builtin.service:
+  service:
     name: httpd
     state: started
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
 - name: Start and enable MySQL (Debian)
-  ansible.builtin.service:
+  service:
     name: mysql
     state: started
     enabled: yes
   when: ansible_os_family == 'Debian'
 
 - name: Start and enable MySQL (RedHat)
-  ansible.builtin.service:
+  service:
     name: mysqld
     state: started
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
+# --- Creare baza de date si user WordPress ---
+# Socket-ul MySQL e diferit pe Debian vs RedHat
 - name: Create WordPress database (Debian)
   community.mysql.mysql_db:
     name: "{{ wordpress_db_name }}"
@@ -128,70 +135,70 @@
     login_unix_socket: /var/lib/mysql/mysql.sock
   when: ansible_os_family == 'RedHat'
 
-- name: Download WordPress archive
-  ansible.builtin.get_url:
+# --- Descarcare si instalare WordPress ---
+- name: Download WordPress
+  get_url:
     url: https://wordpress.org/latest.tar.gz
     dest: /tmp/wordpress.tar.gz
-    mode: '0644'
-    timeout: 60
 
-- name: Extract WordPress into /var/www/html
-  ansible.builtin.unarchive:
+- name: Extract WordPress
+  unarchive:
     src: /tmp/wordpress.tar.gz
     dest: /var/www/html/
     remote_src: yes
     creates: /var/www/html/wordpress/wp-settings.php
 
-- name: Deploy wp-config.php from template
-  ansible.builtin.template:
+# --- Configurare WordPress ---
+- name: Deploy wp-config.php
+  template:
     src: wp-config.php.j2
     dest: /var/www/html/wordpress/wp-config.php
-    mode: '0640'
     owner: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
     group: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
+    mode: '0640'
 
-- name: Set correct ownership for WordPress files (Debian)
-  ansible.builtin.file:
+- name: Set ownership for WordPress files (Debian)
+  file:
     path: /var/www/html/wordpress
     owner: www-data
     group: www-data
     recurse: yes
   when: ansible_os_family == 'Debian'
 
-- name: Set correct ownership for WordPress files (RedHat)
-  ansible.builtin.file:
+- name: Set ownership for WordPress files (RedHat)
+  file:
     path: /var/www/html/wordpress
     owner: apache
     group: apache
     recurse: yes
   when: ansible_os_family == 'RedHat'
 
-- name: Deploy WordPress Apache vhost (Debian)
-  ansible.builtin.template:
+# --- VirtualHost pentru WordPress ---
+- name: Deploy WordPress vhost (Debian)
+  template:
     src: wp-vhost.conf.j2
     dest: /etc/apache2/sites-available/wordpress.conf
-    mode: '0644'
   when: ansible_os_family == 'Debian'
   notify: Reload Apache WP
 
 - name: Enable WordPress site (Debian)
-  ansible.builtin.command:
-    cmd: a2ensite wordpress.conf
+  command: a2ensite wordpress.conf
+  args:
     creates: /etc/apache2/sites-enabled/wordpress.conf
   when: ansible_os_family == 'Debian'
   notify: Reload Apache WP
 
-- name: Enable mod_rewrite for WordPress (Debian)
-  ansible.builtin.command:
-    cmd: a2enmod rewrite
+- name: Enable mod_rewrite (Debian)
+  command: a2enmod rewrite
+  args:
     creates: /etc/apache2/mods-enabled/rewrite.load
   when: ansible_os_family == 'Debian'
   notify: Reload Apache WP
 
-- name: Deploy WordPress Apache vhost (RedHat)
-  ansible.builtin.template:
+# Pe RedHat, fisierele din conf.d/ sunt incluse automat
+- name: Deploy WordPress vhost (RedHat)
+  template:
     src: wp-vhost.conf.j2
     dest: /etc/httpd/conf.d/wordpress.conf
-    mode: '0644'
   when: ansible_os_family == 'RedHat'
   notify: Reload Apache WP

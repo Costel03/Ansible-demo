@@ -1,49 +1,54 @@
 ---
+# ===========================================================
+# WEBSERVER (LAMP) - Apache + MySQL + PHP + VirtualHost
+# Functioneaza pe: Ubuntu, Rocky Linux, CentOS
+# VirtualHost: acasa.local cu pagina PHP customizata
+# ===========================================================
+
+# --- Pregatire repo-uri pentru RedHat/CentOS ---
 - name: Install EPEL repository (RedHat)
-  ansible.builtin.yum:
+  yum:
     name: epel-release
     state: present
   when: ansible_os_family == 'RedHat'
 
-- name: Switch CentOS 7 repos to vault (EOL fix)
-  ansible.builtin.shell: |
+# CentOS 7 e EOL, trebuie schimbat mirror-ul la vault
+- name: Fix CentOS 7 repos (EOL vault)
+  shell: |
     sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-*.repo
     sed -i 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
-  args:
-    executable: /bin/bash
   when: ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7'
 
-- name: Disable MySQL module on EL8 (avoid modular filtering)
-  ansible.builtin.command: dnf -y module disable mysql
+# Rocky 8 are MySQL ca modul DNF, trebuie dezactivat ca sa instalam din repo oficial
+- name: Disable MySQL module on EL8
+  command: dnf -y module disable mysql
   when: ansible_os_family == 'RedHat' and ansible_distribution_major_version == '8'
   changed_when: false
   failed_when: false
 
-- name: Install MySQL repo RPM (RedHat)
-  ansible.builtin.shell: |
-    set -euo pipefail
+- name: Add MySQL community repo (RedHat)
+  shell: |
     URL="{{ 'https://dev.mysql.com/get/mysql80-community-release-el7-11.noarch.rpm' if ansible_distribution_major_version == '7' else 'https://dev.mysql.com/get/mysql80-community-release-el8-9.noarch.rpm' }}"
     curl -L --fail -o /tmp/mysql-community-release.rpm "$URL"
     rpm -Uvh --replacepkgs /tmp/mysql-community-release.rpm
-  args:
-    executable: /bin/bash
   when: ansible_os_family == 'RedHat'
 
+# --- Instalare pachete LAMP ---
 - name: Install LAMP packages (Debian/Ubuntu)
-  ansible.builtin.apt:
+  apt:
     name:
     - apache2
     - mysql-server
     - php
     - php-mysql
     - libapache2-mod-php
-    - python3-pymysql
+    - python3-pymysql # necesar pentru modulul mysql din Ansible
     state: present
     update_cache: yes
   when: ansible_os_family == 'Debian'
 
-- name: Install LAMP packages (RedHat/RockyLinux/CentOS)
-  ansible.builtin.yum:
+- name: Install LAMP packages (RedHat/CentOS/Rocky)
+  yum:
     name:
     - httpd
     - mysql-community-server
@@ -52,130 +57,85 @@
     - php-zip
     - php-xml
     - php-mbstring
-    - python3-PyMySQL
+    - python3-PyMySQL # necesar pentru modulul mysql din Ansible
     state: present
     disable_gpg_check: yes
   when: ansible_os_family == 'RedHat'
 
-- name: Ensure Apache is started and enabled (Debian)
-  ansible.builtin.service:
+# --- Pornire automata servicii ---
+- name: Start and enable Apache (Debian)
+  service:
     name: apache2
     state: started
     enabled: yes
   when: ansible_os_family == 'Debian'
 
-- name: Ensure Apache (httpd) is started and enabled (RedHat)
-  ansible.builtin.service:
+- name: Start and enable Apache (RedHat)
+  service:
     name: httpd
     state: started
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
-- name: Ensure MySQL is started and enabled (Debian)
-  ansible.builtin.service:
+- name: Start and enable MySQL (Debian)
+  service:
     name: mysql
     state: started
     enabled: yes
   when: ansible_os_family == 'Debian'
 
-- name: Ensure MySQL (mysqld) is started and enabled (RedHat)
-  ansible.builtin.service:
+- name: Start and enable MySQL (RedHat)
+  service:
     name: mysqld
     state: started
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
-- name: Create Apache document root directory
-  ansible.builtin.file:
+# --- Configurare VirtualHost acasa.local ---
+- name: Create document root for acasa.local
+  file:
     path: "{{ apache_docroot }}"
     state: directory
     mode: '0755'
-    owner: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
-    group: "{{ 'www-data' if ansible_os_family == 'Debian' else 'apache' }}"
 
-- name: Set SELinux context on document root (RedHat)
-  community.general.sefcontext:
-    target: "{{ apache_docroot }}(/.*)?"
-    setype: httpd_sys_content_t
-    state: present
-  when:
-  - ansible_os_family == 'RedHat'
-  - not (ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7')
-
-- name: Apply SELinux context to document root (RedHat)
-  ansible.builtin.command: restorecon -Rv "{{ apache_docroot }}"
+# SELinux pe RedHat blocheaza Apache daca nu setam contextul corect
+- name: Apply SELinux context on docroot (RedHat)
+  command: restorecon -Rv "{{ apache_docroot }}"
   when: ansible_os_family == 'RedHat'
   changed_when: false
 
-- name: Deploy acasa.local virtual host config (Debian)
-  ansible.builtin.template:
+- name: Deploy vhost config (Debian)
+  template:
     src: vhost.conf.j2
     dest: /etc/apache2/sites-available/acasa.local.conf
-    mode: '0644'
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
+# a2ensite activeaza vhost-ul prin symlink in sites-enabled/
 - name: Enable acasa.local site (Debian)
-  ansible.builtin.command:
-    cmd: a2ensite acasa.local.conf
+  command: a2ensite acasa.local.conf
+  args:
     creates: /etc/apache2/sites-enabled/acasa.local.conf
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
-- name: Disable default Apache site (Debian)
-  ansible.builtin.command:
-    cmd: a2dissite 000-default.conf
-    removes: /etc/apache2/sites-enabled/000-default.conf
-  when: ansible_os_family == 'Debian'
-  notify: Reload Apache
-
 - name: Enable mod_rewrite (Debian)
-  ansible.builtin.command:
-    cmd: a2enmod rewrite
+  command: a2enmod rewrite
+  args:
     creates: /etc/apache2/mods-enabled/rewrite.load
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
-- name: Remove default Apache welcome page (RedHat)
-  ansible.builtin.file:
-    path: /etc/httpd/conf.d/welcome.conf
-    state: absent
-  when: ansible_os_family == 'RedHat'
-  notify: Reload Apache
-
-- name: Deploy acasa.local virtual host config (RedHat)
-  ansible.builtin.template:
+# Pe RedHat, fisierele din conf.d/ sunt incluse automat
+- name: Deploy vhost config (RedHat)
+  template:
     src: vhost.conf.j2
     dest: /etc/httpd/conf.d/acasa.local.conf
-    mode: '0644'
   when: ansible_os_family == 'RedHat'
   notify: Reload Apache
 
+# --- Pagina PHP customizata care afiseaza info despre server ---
 - name: Deploy custom PHP index page
-  ansible.builtin.template:
+  template:
     src: index.php.j2
     dest: "{{ apache_docroot }}/index.php"
-    mode: '0644'
-
-# NFS client - mount Ubuntu's NFS share on rocky and centos
-- name: Install NFS client (RedHat)
-  ansible.builtin.yum:
-    name: nfs-utils
-    state: present
-  when: ansible_os_family == 'RedHat'
-
-- name: Create NFS mount point (RedHat)
-  ansible.builtin.file:
-    path: /mnt/nfs/share
-    state: directory
-    mode: '0755'
-  when: ansible_os_family == 'RedHat'
-
-- name: Mount NFS share from ubuntu (RedHat)
-  ansible.posix.mount:
-    path: /mnt/nfs/share
-    src: 192.168.56.120:/srv/nfs/share
-    fstype: nfs
-    opts: defaults
-    state: mounted
-  when: ansible_os_family == 'RedHat'

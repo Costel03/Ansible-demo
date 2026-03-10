@@ -1,0 +1,16 @@
+---
+- name: Deploy infrastructure
+  hosts: all
+  become: true
+  roles:
+  - role: webserver
+    when: inventory_hostname in groups['webservers']
+    tags: lamp
+
+  - role: nfsserver
+    when: inventory_hostname in groups['nfsservers']
+    tags: nfs
+
+  - role: wordpress
+    when: inventory_hostname in groups['wordpress_vms']
+    tags: wordpress
