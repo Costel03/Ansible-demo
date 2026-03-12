@@ -1,25 +1,15 @@
----
-# ===========================================================
-# WEBSERVER (LAMP) - Apache + MySQL + PHP + VirtualHost
-# Functioneaza pe: Ubuntu, Rocky Linux, CentOS
-# VirtualHost: acasa.local cu pagina PHP customizata
-# ===========================================================
-
-# --- Pregatire repo-uri pentru RedHat/CentOS ---
 - name: Install EPEL repository (RedHat)
   yum:
     name: epel-release
     state: present
   when: ansible_os_family == 'RedHat'
 
-# CentOS 7 e EOL, trebuie schimbat mirror-ul la vault
 - name: Fix CentOS 7 repos (EOL vault)
   shell: |
     sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-*.repo
     sed -i 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
   when: ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7'
 
-# Rocky 8 are MySQL ca modul DNF, trebuie dezactivat ca sa instalam din repo oficial
 - name: Disable MySQL module on EL8
   command: dnf -y module disable mysql
   when: ansible_os_family == 'RedHat' and ansible_distribution_major_version == '8'
@@ -33,7 +23,6 @@
     rpm -Uvh --replacepkgs /tmp/mysql-community-release.rpm
   when: ansible_os_family == 'RedHat'
 
-# --- Instalare pachete LAMP ---
 - name: Install LAMP packages (Debian/Ubuntu)
   apt:
     name:
@@ -42,7 +31,7 @@
     - php
     - php-mysql
     - libapache2-mod-php
-    - python3-pymysql # necesar pentru modulul mysql din Ansible
+    - python3-pymysql
     state: present
     update_cache: yes
   when: ansible_os_family == 'Debian'
@@ -57,12 +46,11 @@
     - php-zip
     - php-xml
     - php-mbstring
-    - python3-PyMySQL # necesar pentru modulul mysql din Ansible
+    - python3-PyMySQL
     state: present
     disable_gpg_check: yes
   when: ansible_os_family == 'RedHat'
 
-# --- Pornire automata servicii ---
 - name: Start and enable Apache (Debian)
   service:
     name: apache2
@@ -91,14 +79,12 @@
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
-# --- Configurare VirtualHost acasa.local ---
 - name: Create document root for acasa.local
   file:
     path: "{{ apache_docroot }}"
     state: directory
     mode: '0755'
 
-# SELinux pe RedHat blocheaza Apache daca nu setam contextul corect
 - name: Apply SELinux context on docroot (RedHat)
   command: restorecon -Rv "{{ apache_docroot }}"
   when: ansible_os_family == 'RedHat'
@@ -111,7 +97,6 @@
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
-# a2ensite activeaza vhost-ul prin symlink in sites-enabled/
 - name: Enable acasa.local site (Debian)
   command: a2ensite acasa.local.conf
   args:
@@ -126,7 +111,6 @@
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
-# Pe RedHat, fisierele din conf.d/ sunt incluse automat
 - name: Deploy vhost config (RedHat)
   template:
     src: vhost.conf.j2
@@ -134,7 +118,6 @@
   when: ansible_os_family == 'RedHat'
   notify: Reload Apache
 
-# --- Pagina PHP customizata care afiseaza info despre server ---
 - name: Deploy custom PHP index page
   template:
     src: index.php.j2

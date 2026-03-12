@@ -14,9 +14,9 @@ ansible ubuntu -m ping
 ansible all -m ping
 ansible ubuntu -a "reboot"
 ansible ubuntu -a "cat /etc/os-release"
-ansible-playbook playbooks/site.yml --tags lamp,nfs
-ansible-playbook playbooks/site.yml --tags wordpress
-ansible-playbook playbooks/site.yml
+ansible-playbook playbook.yml --tags lamp,nfs
+ansible-playbook playbook.yml --tags wordpress
+ansible-playbook playbook.yml
 
 
 Wordpress test:
