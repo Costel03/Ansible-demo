@@ -65,6 +65,14 @@
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
+- name: Open HTTP port in firewalld (RedHat)
+  firewalld:
+    service: http
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: ansible_os_family == 'RedHat'
+
 - name: Start and enable MySQL (Debian)
   service:
     name: mysql
@@ -79,7 +87,21 @@
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
-- name: Create document root for acasa.local
+- name: Remove stale vhost configs (RedHat)
+  shell: find /etc/httpd/conf.d/ -name "*.local.conf" ! -name "{{ apache_vhost_servername }}.conf" -delete
+  when: ansible_os_family == 'RedHat'
+  notify: Reload Apache
+
+- name: Remove stale vhost sites (Debian)
+  shell: |
+    for f in $(find /etc/apache2/sites-available/ -name "*.local.conf" ! -name "{{ apache_vhost_servername }}.conf" -printf "%f\n"); do
+      a2dissite "$f" 2>/dev/null || true
+      rm -f "/etc/apache2/sites-available/$f"
+    done
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache
+
+- name: Create document root for {{ apache_vhost_servername }}
   file:
     path: "{{ apache_docroot }}"
     state: directory
@@ -93,14 +115,14 @@
 - name: Deploy vhost config (Debian)
   template:
     src: vhost.conf.j2
-    dest: /etc/apache2/sites-available/acasa.local.conf
+    dest: /etc/apache2/sites-available/{{ apache_vhost_servername }}.conf
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
-- name: Enable acasa.local site (Debian)
-  command: a2ensite acasa.local.conf
+- name: Enable site (Debian)
+  command: a2ensite {{ apache_vhost_servername }}.conf
   args:
-    creates: /etc/apache2/sites-enabled/acasa.local.conf
+    creates: /etc/apache2/sites-enabled/{{ apache_vhost_servername }}.conf
   when: ansible_os_family == 'Debian'
   notify: Reload Apache
 
@@ -114,7 +136,7 @@
 - name: Deploy vhost config (RedHat)
   template:
     src: vhost.conf.j2
-    dest: /etc/httpd/conf.d/acasa.local.conf
+    dest: /etc/httpd/conf.d/{{ apache_vhost_servername }}.conf
   when: ansible_os_family == 'RedHat'
   notify: Reload Apache
 

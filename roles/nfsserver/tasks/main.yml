@@ -1,10 +1,4 @@
 ---
-# ============================================
-# NFS SERVER - instaleaza si configureaza NFS
-# Functioneaza pe: Ubuntu, Rocky Linux, CentOS
-# ============================================
-
-# --- Instalare pachete NFS ---
 - name: Install NFS server (Debian/Ubuntu)
   apt:
     name: nfs-kernel-server
@@ -18,8 +12,6 @@
     state: present
   when: ansible_os_family == 'RedHat'
 
-# --- Creare director partajat NFS ---
-# Pe Ubuntu grupul e 'nogroup', pe RedHat e 'nobody'
 - name: Create NFS export directory
   file:
     path: "{{ nfs_export_dir }}"
@@ -28,8 +20,6 @@
     owner: nobody
     group: "{{ 'nogroup' if ansible_os_family == 'Debian' else 'nobody' }}"
 
-# --- Configurare /etc/exports (ce IP-uri au acces) ---
-# IP-urile permise sunt definite in group_vars/all.yml -> nfs_allowed_ips
 - name: Configure /etc/exports from template
   template:
     src: exports.j2
@@ -38,7 +28,6 @@
   - Reload NFS exports
   - Restart NFS
 
-# --- Pornire automata NFS ---
 - name: Start and enable NFS (Debian)
   service:
     name: nfs-kernel-server

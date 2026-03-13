@@ -10,10 +10,10 @@
     </Directory>
 
 {% if ansible_os_family == 'Debian' %}
-    ErrorLog  ${APACHE_LOG_DIR}/acasa_error.log
-    CustomLog ${APACHE_LOG_DIR}/acasa_access.log combined
+    ErrorLog  ${APACHE_LOG_DIR}/{{ apache_vhost_servername }}_error.log
+    CustomLog ${APACHE_LOG_DIR}/{{ apache_vhost_servername }}_access.log combined
 {% else %}
-    ErrorLog  /var/log/httpd/acasa_error.log
-    CustomLog /var/log/httpd/acasa_access.log combined
+    ErrorLog  /var/log/httpd/{{ apache_vhost_servername }}_error.log
+    CustomLog /var/log/httpd/{{ apache_vhost_servername }}_access.log combined
 {% endif %}
 </VirtualHost>
