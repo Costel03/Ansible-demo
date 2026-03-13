@@ -1,18 +1,10 @@
 ---
-# ===========================================================
-# WORDPRESS - instaleaza WordPress pe o masina separata
-# Se ruleaza doar cu: ansible-playbook site.yml --tags wordpress
-# Functioneaza pe: Ubuntu, Rocky Linux, CentOS
-# ===========================================================
-
-# --- Pregatire repo-uri pentru RedHat/CentOS ---
 - name: Install EPEL (RedHat)
   yum:
     name: epel-release
     state: present
   when: ansible_os_family == 'RedHat'
 
-# CentOS 7 e EOL, trebuie schimbat mirror-ul la vault
 - name: Fix CentOS 7 repos (EOL vault)
   shell: |
     sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-*.repo
@@ -32,7 +24,6 @@
     rpm -Uvh --replacepkgs /tmp/mysql-community-release.rpm
   when: ansible_os_family == 'RedHat'
 
-# --- Instalare pachete necesare WordPress ---
 - name: Install WordPress dependencies (Debian/Ubuntu)
   apt:
     name:
@@ -70,7 +61,6 @@
     disable_gpg_check: yes
   when: ansible_os_family == 'RedHat'
 
-# --- Pornire automata servicii ---
 - name: Start and enable Apache (Debian)
   service:
     name: apache2
@@ -99,8 +89,6 @@
     enabled: yes
   when: ansible_os_family == 'RedHat'
 
-# --- Creare baza de date si user WordPress ---
-# Socket-ul MySQL e diferit pe Debian vs RedHat
 - name: Create WordPress database (Debian)
   community.mysql.mysql_db:
     name: "{{ wordpress_db_name }}"
@@ -135,7 +123,6 @@
     login_unix_socket: /var/lib/mysql/mysql.sock
   when: ansible_os_family == 'RedHat'
 
-# --- Descarcare si instalare WordPress ---
 - name: Download WordPress
   get_url:
     url: https://wordpress.org/latest.tar.gz
@@ -148,7 +135,6 @@
     remote_src: yes
     creates: /var/www/html/wordpress/wp-settings.php
 
-# --- Configurare WordPress ---
 - name: Deploy wp-config.php
   template:
     src: wp-config.php.j2
@@ -173,7 +159,6 @@
     recurse: yes
   when: ansible_os_family == 'RedHat'
 
-# --- VirtualHost pentru WordPress ---
 - name: Deploy WordPress vhost (Debian)
   template:
     src: wp-vhost.conf.j2
@@ -195,7 +180,6 @@
   when: ansible_os_family == 'Debian'
   notify: Reload Apache WP
 
-# Pe RedHat, fisierele din conf.d/ sunt incluse automat
 - name: Deploy WordPress vhost (RedHat)
   template:
     src: wp-vhost.conf.j2
