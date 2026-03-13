@@ -1,5 +1,7 @@
 ---
 ansible_python_interpreter: /usr/bin/python3
+apache_vhost_servername: acasa.local
+apache_docroot: /var/www/acasa.local
 mysql_root_password: Secret123!
 wordpress_db_name: wordpress
 wordpress_db_user: wpuser

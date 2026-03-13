@@ -46,3 +46,7 @@ ansible webservers -m shell -a "systemctl status mysql || systemctl status mysql
 ansible webservers -m shell -a "curl -s -H 'Host: acasa.local' http://localhost/ | grep -i 'bine ai venit'" -b
 -PHP files
 ansible webservers -m shell -a "ls -la /var/www/acasa.local/index.php" -b
+
+
+
+sudo mount 192.168.56.120:/srv/nfs/share /share

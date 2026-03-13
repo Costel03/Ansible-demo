@@ -1,3 +1,0 @@
----
-apache_vhost_servername: rocky.local
-apache_docroot: /var/www/rocky.local

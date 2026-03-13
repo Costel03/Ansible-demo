@@ -1,5 +1,6 @@
 <VirtualHost *:80>
     ServerName {{ apache_vhost_servername }}
+    ServerAlias {{ ansible_hostname }}.local
     DocumentRoot {{ apache_docroot }}
 
     <Directory {{ apache_docroot }}>
